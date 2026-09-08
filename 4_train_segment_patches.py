@@ -4,7 +4,7 @@ from niftiai import aug_transforms3d, TensorImage3d
 from niftiai.data import ImageBlock3d, MaskBlock3d
 from src.augment import Blur3d, ScaledChiNoise3d
 from src.models import Unet3d, StepActivation, TwoInputsUnet3d
-from src.transforms import FlipSagittal, StoreZeroMask, ApplyZeroMask, ScaleIntensity
+from src.transforms import FlipSagittal, StoreZeroMask, ApplyZeroMask, ScaleIntensity, ContrastShift
 path = '.'  # if data_path is absolute(=starts with "/") set path = '/'
 data_path = 'data'
 
@@ -61,7 +61,9 @@ if __name__ == '__main__':
                                       max_ring=1., max_contrast=.1, max_dof_noise=3, image_mode='nearest',
                                       dims_ghost=(0, 1, 2), n_ghosts=2, p_spike=.1, freq_spike=.5, dims_ring=(0, 1, 2),
                                       max_move=3 * .02, p_flip=.5 if i >= 9 and len(p_strings) < 5 else .0)
-        batch_tfms += [StoreZeroMask(), ScaledChiNoise3d(.1, p=.1), Blur3d(.5, p=.1), ApplyZeroMask(), ScaleIntensity()]
+        # p_free>0 also draws non-T1w contrasts (e.g. WM darkest); set it to 0 to stay T1w only
+        batch_tfms += [StoreZeroMask(), ContrastShift(max_shift=.25, p_free=.25, p=.5),
+                       ScaledChiNoise3d(.1, p=.1), Blur3d(.5, p=.1), ApplyZeroMask(), ScaleIntensity()]
         dls = get_dls(patch_df, img_col='img', pred_mask_col='pred_mask', mask_col='mask', valid_col='is_valid',
                       bs=2, batch_tfms=batch_tfms, item_tfms=[FlipSagittal()] if 0 <= i < 9 else None)
         model = TwoInputsUnet3d(Unet3d(n_in=2, n_out=1, n_ch=8), StepActivation())
@@ -86,7 +88,8 @@ if __name__ == '__main__':
                                           max_ring=1., max_contrast=.1, max_dof_noise=3, mode='nearest',
                                           dims_ghost=(0, 1, 2), n_ghosts=2, p_spike=.1, freq_spike=.5, dims_ring=(0, 1, 2),
                                           max_move=3 * .02, p_flip=.5 if i >= 9 and len(p_strings) < 5 else .0)
-            batch_tfms += [StoreZeroMask(), ApplyZeroMask(), ScaleIntensity()]
+            batch_tfms += [StoreZeroMask(), ContrastShift(max_shift=.25, p_free=.25, p=.5),
+                           ApplyZeroMask(), ScaleIntensity()]
             dls = get_dls(patch_df, img_col='img', pred_mask_col='pred_mask', mask_col='mask', valid_col='is_valid',
                           bs=2, batch_tfms=batch_tfms, item_tfms=[FlipSagittal()] if 0 <= i < 9 else None)
             model = TwoInputsUnet3d(Unet3d(n_in=2, n_out=1, n_ch=8), StepActivation())

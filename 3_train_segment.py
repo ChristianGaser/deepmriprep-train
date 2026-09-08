@@ -4,7 +4,7 @@ from niftiai import aug_transforms3d, TensorImage3d, SegmentationDataLoaders3d
 from spline_resize import resize
 from src.augment import Blur3d, ScaledChiNoise3d
 from src.models import Unet3d, StepActivation
-from src.transforms import StoreZeroMask, ApplyZeroMask, ScaleIntensity
+from src.transforms import StoreZeroMask, ApplyZeroMask, ScaleIntensity, ContrastShift
 set_seed(1)
 path = '.'  # if data_path is absolute(=starts with "/") set path = '/'
 data_path = 'data'
@@ -21,7 +21,9 @@ batch_tfms = aug_transforms3d(max_warp=0, max_zoom=0, max_rotate=0, max_shear=0,
                               max_ghost=.5, max_spike=2., max_bias=.2, max_motion=.5, max_noise=.0, max_down=2,
                               max_ring=1., max_contrast=.1, max_dof_noise=3, image_mode='nearest',
                               dims_ghost=(0, 1, 2), n_ghosts=2, p_spike=.1, freq_spike=.5, dims_ring=(0, 1, 2))
-batch_tfms += [StoreZeroMask(), ScaledChiNoise3d(.1, p=.1), Blur3d(.5, p=.1), ApplyZeroMask(), ScaleIntensity()]
+# p_free>0 also draws non-T1w contrasts (e.g. WM darkest); set it to 0 to stay T1w only
+batch_tfms += [StoreZeroMask(), ContrastShift(max_shift=.25, p_free=.25, p=.5),
+               ScaledChiNoise3d(.1, p=.1), Blur3d(.5, p=.1), ApplyZeroMask(), ScaleIntensity()]
 model = torch.nn.Sequential(Unet3d(n_out=1), StepActivation())
 # train on full openneuro-hd dataset
 df_total = df.copy()
