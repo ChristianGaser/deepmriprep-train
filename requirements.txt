@@ -1,6 +1,7 @@
 #torch
 niftiai==0.2.0
 deepmriprep==0.2.0
+deepbet
 mriaug==0.1.0
 spline-resize==0.1.1
 monai

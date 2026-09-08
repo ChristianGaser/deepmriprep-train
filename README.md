@@ -85,6 +85,28 @@ Notes:
 - `6_train_warp.py` is not covered here, it needs the 1.5mm `p/` inputs from the
   CAT12 path.
 
+### Brain extraction (optional)
+
+`8_train_bet.py` trains the two deepbet models on the same simulations. It needs
+a **native space** run (`simu.affine = 0`), because deepbet works on the whole
+head: the 168x192x168mm field of view of the registered grid slices through the
+skull, and on one test volume 66% of its inferior face and 27% of its anterior
+face are still head.
+
+The script reproduces both deepbet stages - the bbox model on the whole volume
+at 128^3, the main model on the bounding box of the brain plus a 10% margin at
+256^3 - and uses deepbet's own normalization and its own `get_bbox`, so the crop
+a model is trained on is the crop it gets at inference. `7_compile_models.py`
+traces both with a softmax, because deepbet thresholds the model output directly
+while deepmriprep applies the softmax itself for nogm.
+
+The mask is `dseg > 0`, i.e. CAT12's APRG mask, so the result reproduces that and
+not the mask deepbet ships. That is the reason to do it: `2_prep_segment.py`
+strips with `p0 > 0` while inference strips with deepbet, and training the
+extractor on the same mask the segmentation was trained behind removes that
+mismatch. Out of domain it will be less robust than the shipped model, which saw
+far more heterogeneous data.
+
 ## Run scripts
 Run the 7 scripts (+read the comments) `1_prep_warp.py`-`7_compile_models.py`!
  

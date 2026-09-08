@@ -12,7 +12,6 @@ The pairing follows the BIDS entities that mri_simulate writes: the label
 carries only the anatomical tags in its desc, the image carries the acquisition
 tags in front of them.
 """
-import re
 import numpy as np
 import pandas as pd
 import torch
@@ -21,6 +20,7 @@ from tqdm import tqdm
 from niftiai import TensorImage3d
 from spline_resize import resize
 from src.synth import tissue_weights
+from src.bids import pair_simulations
 ALIGN = True
 data_path = 'data'
 simu_path = 'data/simu'   # the mri_simulate derivatives folder
@@ -36,60 +36,6 @@ def min_max(x, low=.005, high=.995):  # same normalization as 2_prep_segment.py
     return x.clamp(min=0)
 
 
-def split_entities(path):
-    """Split a BIDS filename into everything before the desc entity, the desc
-    label and the suffix. `_label-GM_probseg` keeps its label entity in the
-    suffix part, which is what pairs it with its dseg."""
-    name = Path(path).name
-    for ext in ('.nii.gz', '.nii'):
-        if name.endswith(ext):
-            name = name[:-len(ext)]
-            break
-    m = re.match(r'^(?P<base>.*?)(?:_desc-(?P<desc>[A-Za-z0-9]+))?_(?P<suffix>[A-Za-z0-9-]+)$', name)
-    return m.group('base'), m.group('desc') or '', m.group('suffix')
-
-
-def pair_simulations(simu_dir):
-    """Pair every simulated T1w with the label that belongs to its anatomy.
-
-    A label desc holds the anatomical tags plus `Clean`, an image desc holds the
-    acquisition tags followed by the same anatomical tags. The label whose
-    anatomical part is the longest suffix of the image desc is therefore the
-    right one, which keeps a `Wmh2` image away from the label of a run without
-    WMHs. A cleaned label wins over an uncleaned one of the same anatomy.
-    """
-    labels = {}
-    for fp in sorted(Path(simu_dir).rglob('*_dseg.nii*')):
-        base, desc, _ = split_entities(fp)
-        anat = desc[:-5] if desc.endswith('Clean') else desc
-        labels.setdefault(base, []).append((anat, desc.endswith('Clean'), fp))
-
-    rows = []
-    for fp in sorted(Path(simu_dir).rglob('*_T1w.nii*')):
-        base, desc, _ = split_entities(fp)
-        if 'Biasfield' in desc:
-            continue
-        cands = [c for c in labels.get(base, []) if desc.endswith(c[0])]
-        if not cands:
-            print(f'No label found for {fp.name}, skipped.')
-            continue
-        anat, is_clean, lab = max(cands, key=lambda c: (len(c[0]), c[1]))
-        gm = Path(str(lab).replace('_dseg.nii', '_label-GM_probseg.nii'))
-        rows.append({'filename': f'{base}_desc-{desc}' if desc else base,
-                     'subject': base.split('_space-')[0].split('_res-')[0],
-                     't1w': str(fp), 'dseg': str(lab),
-                     'gm_probseg': str(gm) if gm.exists() else ''})
-    df = pd.DataFrame(rows)
-    if len(df) == 0:
-        return df
-    # the fold has to follow the source subject, otherwise variants of one brain
-    # end up on both sides of the cross validation
-    subjects = sorted(df.subject.unique())
-    fold = {s: i % n_folds for i, s in enumerate(subjects)}
-    df['fold'] = df.subject.map(fold)
-    return df
-
-
 if __name__ == '__main__':
     shape_05mm = (336, 384, 336)
     shape_075mm = (224, 256, 224)
@@ -98,7 +44,7 @@ if __name__ == '__main__':
     subdirs = ['img_05mm_minmax', 'img_075mm_minmax', 'p0_05mm', 'p0_075mm', 'nogm', 'csvs']
     for subdir in subdirs: Path(f'{data_path}/{subdir}').mkdir(parents=True, exist_ok=True)
 
-    df = pair_simulations(simu_path)
+    df = pair_simulations(simu_path, n_folds)
     if len(df) == 0:
         raise SystemExit(f'No simulated T1w/dseg pairs found below {simu_path}')
     print(f'{len(df)} simulations from {df.subject.nunique()} subjects, '
