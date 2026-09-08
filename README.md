@@ -40,6 +40,51 @@ In `2_prep_segment.py`, a rerun of CAT12 on the `img_05mm` files should result i
 data/img_05mm/CAT12.8.2/mri/p00009_sub-06.nii
 ```
 
+## Training on simulated data (optional)
+
+[mri_simulate](https://github.com/ChristianGaser/T1-MRI-Phantom) can produce the
+training pairs directly. Run it with `simu.affine = 1` and `simu.clean = 1`: it
+then writes the T1w and its ground truth on the same 336x384x336 grid of 0.5mm
+voxels that `2_prep_segment.py` produces, so no CAT12 run, no affine and no bias
+correction are needed on this path.
+
+```matlab
+simu = struct('name','sub-01_T1w.nii', 'snrWM',40, 'affine',1, 'clean',1);
+mri_simulate(simu, struct('percent',0));
+```
+
+Point `simu_path` in `2b_prep_simulate.py` at the derivatives folder and run it.
+It pairs every T1w with the label of its anatomy - runs that differ only in
+noise, bias field or motion share one label and each becomes its own training
+sample - skull-strips, normalizes, derives the 0.75mm versions and writes
+`data/csvs/simulated.csv`.
+
+Then set at the top of the training scripts:
+
+```python
+csv_name = 'simulated.csv'
+eval_suffix = ''   # 3_train_segment.py only
+```
+
+`eval_suffix` exists because a simulation has no separate non-bias-corrected
+variant, unless you simulate one with `rf.percent` and let it share the label.
+
+Notes:
+
+- The GM `_probseg` that `simu.clean` writes gives an **exact** nogm target,
+  the voxels where the triangular decomposition of the label overestimates GM.
+  `2_prep_segment.py` can only estimate that from the CAT12 `p1`.
+- The fold follows the source subject, so variants of one brain never land on
+  both sides of the cross validation.
+- `5_train_nogm.py` still reads only the first 5 rows (`[:5]`); drop that if you
+  want to use the whole set.
+- Motion artefacts belong in the simulation, not in the augmentation: they are a
+  global k-space operation and `4_train_segment_patches.py` augments 128^3
+  patches, which cannot carry them. Simulate motion variants instead, they share
+  the label file.
+- `6_train_warp.py` is not covered here, it needs the 1.5mm `p/` inputs from the
+  CAT12 path.
+
 ## Run scripts
 Run the 7 scripts (+read the comments) `1_prep_warp.py`-`7_compile_models.py`!
  

@@ -8,12 +8,15 @@ from src.transforms import StoreZeroMask, ApplyZeroMask, ScaleIntensity, Contras
 set_seed(1)
 path = '.'  # if data_path is absolute(=starts with "/") set path = '/'
 data_path = 'data'
+csv_name = 'openneuro_hd.csv'  # 'simulated.csv' for the mri_simulate outputs
+eval_suffix = '_raw'  # the uncorrected images used at prediction time; '' for simulated data,
+                      # which has no separate non-bias-corrected variant
 Path(f'{data_path}/models').mkdir(exist_ok=True)
 Path(f'{data_path}/p0_05mm_pred').mkdir(exist_ok=True)
 nib_affine_05mm = np.array([[.5, 0, 0, -84], [0, .5, 0, -120], [0, 0, .5, -72], [0, 0, 0, 0]])
 
 shape = (336, 384, 336)
-df = pd.read_csv(f'{data_path}/csvs/openneuro_hd.csv')
+df = pd.read_csv(f'{data_path}/csvs/{csv_name}')
 df['img'] = f'{data_path}/img_075mm_minmax/' + df.filename + '.nii.gz'
 df['mask'] = f'{data_path}/p0_075mm/' + df.filename + '.nii.gz'
 header = TensorImage3d.create(df['mask'].iloc[0]).header
@@ -38,7 +41,7 @@ torch.save(learn.model.state_dict(), f'{data_path}/models/segmentation_model.pth
 #learn.model.load_state_dict(torch.load(f'{DATA_PATH}/models/segmentation_model.pth')) # load model
 for fp in tqdm(df_total.img[:-1]):
     filename = Path(fp).stem.split('.')[0]
-    x = TensorImage3d.create(fp.replace('_minmax', '_minmax_raw')).cuda()
+    x = TensorImage3d.create(fp.replace('_minmax', '_minmax' + eval_suffix)).cuda()
     with torch.no_grad():
         p = learn.model(x[None])
         p = resize(p, shape, align_corners=True, mask_value=0)[0]
@@ -58,7 +61,7 @@ for fold in range(5):
     # learn.model.load_state_dict(torch.load(f'{DATA_PATH}/models/segmentation_model_fold{fold}.pth')) # load model
     for fp in tqdm(df.img):
         filename = Path(fp).stem.split('.')[0]
-        x = TensorImage3d.create(fp.replace('_minmax', '_minmax_raw')).cuda()
+        x = TensorImage3d.create(fp.replace('_minmax', '_minmax' + eval_suffix)).cuda()
         with torch.no_grad():
             p = learn.model(x[None])
             p = resize(p, shape, align_corners=True, prefilter=True, mask_value=0)[0]

@@ -7,6 +7,7 @@ from src.models import Unet3d, StepActivation, TwoInputsUnet3d
 from src.transforms import FlipSagittal, StoreZeroMask, ApplyZeroMask, ScaleIntensity, ContrastShift
 path = '.'  # if data_path is absolute(=starts with "/") set path = '/'
 data_path = 'data'
+csv_name = 'openneuro_hd.csv'  # 'simulated.csv' for the mri_simulate outputs
 
 
 def get_dls(df, img_col, pred_mask_col, mask_col, valid_col, batch_tfms=None, bs=1, item_tfms=None):
@@ -39,7 +40,7 @@ def get_patch_df(df, patch_strings, cols=('img', 'pred_mask', 'mask')):
 
 if __name__ == '__main__':
     set_seed(1)
-    df = pd.read_csv(f'{data_path}/csvs/openneuro_hd.csv')
+    df = pd.read_csv(f'{data_path}/csvs/{csv_name}')
     df['img'] = f'{data_path}/img_05mm_minmax/' + df.filename + '.nii.gz'
     df['mask'] = f'{data_path}/p0_05mm/' + df.filename + '.nii.gz'
     header = TensorImage3d.create(df.img[0]).header
