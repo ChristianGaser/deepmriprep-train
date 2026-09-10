@@ -2,7 +2,7 @@ from tqdm import tqdm
 from fastai.basics import np, pd, mae, torch, set_seed, Path, Learner
 from niftiai import aug_transforms3d, TensorImage3d, SegmentationDataLoaders3d
 from spline_resize import resize
-from src.augment import Blur3d, ScaledChiNoise3d
+from src.augment import Blur3d, ScaledChiNoise3d, Resolution3d
 from src.models import Unet3d, StepActivation
 from src.transforms import StoreZeroMask, ApplyZeroMask, ScaleIntensity, ContrastShift
 set_seed(1)
@@ -21,11 +21,14 @@ df['img'] = f'{data_path}/img_075mm_minmax/' + df.filename + '.nii.gz'
 df['mask'] = f'{data_path}/p0_075mm/' + df.filename + '.nii.gz'
 header = TensorImage3d.create(df['mask'].iloc[0]).header
 batch_tfms = aug_transforms3d(max_warp=0, max_zoom=0, max_rotate=0, max_shear=0, max_translate=.02, p_affine=.2,
-                              max_ghost=.5, max_spike=2., max_bias=.2, max_motion=.5, max_noise=.0, max_down=2,
+                              max_ghost=.5, max_spike=2., max_bias=.2, max_motion=.5, max_noise=.0, max_down=0,
                               max_ring=1., max_contrast=.1, max_dof_noise=3, image_mode='nearest',
                               dims_ghost=(0, 1, 2), n_ghosts=2, p_spike=.1, freq_spike=.5, dims_ring=(0, 1, 2))
 # p_free>0 also draws non-T1w contrasts (e.g. WM darkest); set it to 0 to stay T1w only
+# max_down=0: mriaug reduces and interpolates back with nearest on one fixed
+# axis, Resolution3d replaces it with an area average and a spline
 batch_tfms += [StoreZeroMask(), ContrastShift(max_shift=.25, p_free=.25, p=.5),
+               Resolution3d(max_scale=3., p_iso=.3, p=.15),
                ScaledChiNoise3d(.1, p=.1), Blur3d(.5, p=.1), ApplyZeroMask(), ScaleIntensity()]
 model = torch.nn.Sequential(Unet3d(n_out=1), StepActivation())
 # train on full openneuro-hd dataset

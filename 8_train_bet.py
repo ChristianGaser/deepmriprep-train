@@ -33,6 +33,7 @@ from tqdm import tqdm
 from fastai.basics import set_seed, Learner
 from niftiai import aug_transforms3d, SegmentationDataLoaders3d
 from deepbet.bet import BrainExtraction
+from src.augment import Resolution3d
 from src.bids import pair_simulations
 from src.loss import DiceFocalLoss
 from src.models import Unet3d
@@ -158,21 +159,22 @@ if __name__ == '__main__':
     # the bbox model has to find the brain in all of them.
     small_tfms = aug_transforms3d(max_warp=0, max_zoom=.1, max_rotate=.15, max_shear=.02,
                                   max_translate=.05, p_affine=.5, max_ghost=.5, max_spike=2.,
-                                  max_bias=.3, max_motion=.5, max_noise=.02, max_down=2,
+                                  max_bias=.3, max_motion=.5, max_noise=.02, max_down=0,
                                   max_ring=1., max_contrast=.2, max_dof_noise=3, p_flip=.5,
                                   image_mode='nearest', dims_ghost=(0, 1, 2), n_ghosts=2,
                                   p_spike=.1, freq_spike=.5, dims_ring=(0, 1, 2))
-    small_tfms += [BetNormalize()]
+    # see Resolution3d: mriaug's downsampling is nearest on one fixed axis
+    small_tfms += [Resolution3d(max_scale=4., p_iso=.4, p=.25), BetNormalize()]
 
     # the box of the main stage comes from the bbox model at inference, so zoom
     # and translation stand in for the error that model makes
     large_tfms = aug_transforms3d(max_warp=0, max_zoom=.08, max_rotate=.05, max_shear=0,
                                   max_translate=.05, p_affine=.6, max_ghost=.5, max_spike=2.,
-                                  max_bias=.3, max_motion=.5, max_noise=.02, max_down=2,
+                                  max_bias=.3, max_motion=.5, max_noise=.02, max_down=0,
                                   max_ring=1., max_contrast=.2, max_dof_noise=3, p_flip=.5,
                                   image_mode='nearest', dims_ghost=(0, 1, 2), n_ghosts=2,
                                   p_spike=.1, freq_spike=.5, dims_ring=(0, 1, 2))
-    large_tfms += [BetNormalize()]
+    large_tfms += [Resolution3d(max_scale=4., p_iso=.4, p=.25), BetNormalize()]
 
     train_stage(df, DIRS['small'], DIRS['small_mask'], n_ch=16,
                 cls_props=[1 - frac_small, frac_small], batch_tfms=small_tfms,

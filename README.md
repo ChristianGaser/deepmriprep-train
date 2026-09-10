@@ -85,6 +85,22 @@ Notes:
 - `6_train_warp.py` is not covered here, it needs the 1.5mm `p/` inputs from the
   CAT12 path.
 
+### Resolution augmentation
+
+`Resolution3d` in `src/augment.py` replaces mriaug's `max_down`, which is
+switched off in the training scripts. Two reasons:
+
+- mriaug's `Downsample3d` is fixed to a single axis (its `dims` defaults to the
+  integer `2`), so it only ever simulates thick axial slices. `Resolution3d`
+  picks any of the three axes and, with probability `p_iso`, degrades all three
+  at once - a 1mm scan interpolated onto the 0.5mm grid, which is what most real
+  data is.
+- mriaug reduces *and* interpolates back with `nearest`. A thick slice is the
+  integral of the tissue over the slice profile, so the reduction has to be an
+  average (`area`), and the way back is the same spline the rest of the
+  preprocessing uses. Reduced to 1.5mm slices and back, the rmse against the
+  undegraded volume drops from 48.8 to 31.8.
+
 ### Brain extraction (optional)
 
 `8_train_bet.py` trains the two deepbet models on the same simulations. It needs
