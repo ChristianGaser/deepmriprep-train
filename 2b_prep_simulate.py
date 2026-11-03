@@ -53,6 +53,7 @@ if __name__ == '__main__':
     for row in tqdm(df.itertuples(), total=len(df)):
         im = TensorImage3d.create(row.t1w).cuda()
         p0 = TensorImage3d.create(row.dseg).cuda()
+        p0[p0 > 3] = 3
         if tuple(im.shape[-3:]) != shape_05mm:
             raise ValueError(f'{row.t1w} has shape {tuple(im.shape[-3:])}, expected {shape_05mm}. '
                              f'Run mri_simulate with simu.affine = 1.')
