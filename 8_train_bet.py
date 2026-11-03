@@ -178,7 +178,7 @@ if __name__ == '__main__':
 
     train_stage(df, DIRS['small'], DIRS['small_mask'], n_ch=16,
                 cls_props=[1 - frac_small, frac_small], batch_tfms=small_tfms,
-                epochs=40, lr=1e-3, model_name='brain_extraction_bbox_model', bs=2)
+                epochs=40, lr=1e-3, model_name='brain_extraction_bbox_model', bs=1)
     train_stage(df, DIRS['large'], DIRS['large_mask'], n_ch=8,
                 cls_props=[1 - frac_large, frac_large], batch_tfms=large_tfms,
                 epochs=30, lr=1e-3, model_name='brain_extraction_model', bs=1)

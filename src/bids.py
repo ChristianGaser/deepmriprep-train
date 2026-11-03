@@ -38,7 +38,7 @@ def pair_simulations(simu_dir, n_folds=5):
     rows = []
     for fp in sorted(Path(simu_dir).rglob('*_T1w.nii*')):
         base, desc, _ = split_entities(fp)
-        if 'Biasfield' in desc:
+        if 'biasfield' in desc.lower():
             continue
         cands = [c for c in labels.get(base, []) if desc.endswith(c[0])]
         if not cands:
@@ -46,8 +46,10 @@ def pair_simulations(simu_dir, n_folds=5):
             continue
         anat, is_clean, lab = max(cands, key=lambda c: (len(c[0]), c[1]))
         gm = Path(str(lab).replace('_dseg.nii', '_label-GM_probseg.nii'))
+        subject_match = re.search(r'(?:^|_)sub-[^_]+', base)
+        subject = base[:subject_match.end()] if subject_match else base.split('_space-')[0].split('_res-')[0]
         rows.append({'filename': f'{base}_desc-{desc}' if desc else base,
-                     'subject': base.split('_space-')[0].split('_res-')[0],
+                     'subject': subject,
                      't1w': str(fp), 'dseg': str(lab),
                      'gm_probseg': str(gm) if gm.exists() else ''})
     df = pd.DataFrame(rows)
