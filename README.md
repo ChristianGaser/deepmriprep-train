@@ -40,6 +40,89 @@ In `2_prep_segment.py`, a rerun of CAT12 on the `img_05mm` files should result i
 data/img_05mm/CAT12.8.2/mri/p00009_sub-06.nii
 ```
 
+## Training on simulated data (optional)
+
+[mri_simulate](https://github.com/ChristianGaser/T1-MRI-Phantom) can produce the
+training pairs directly. Run it with `simu.affine = 1` and `simu.clean = 1`: it
+then writes the T1w and its ground truth on the same 336x384x336 grid of 0.5mm
+voxels that `2_prep_segment.py` produces, so no CAT12 run, no affine and no bias
+correction are needed on this path.
+
+```matlab
+simu = struct('name','sub-01_T1w.nii', 'snrWM',40, 'affine',1, 'clean',1);
+mri_simulate(simu, struct('percent',0));
+```
+
+Point `simu_path` in `2b_prep_simulate.py` at the derivatives folder and run it.
+It pairs every T1w with the label of its anatomy - runs that differ only in
+noise, bias field or motion share one label and each becomes its own training
+sample - skull-strips, normalizes, derives the 0.75mm versions and writes
+`data/csvs/simulated.csv`.
+
+Then set at the top of the training scripts:
+
+```python
+csv_name = 'simulated.csv'
+eval_suffix = ''   # 3_train_segment.py only
+```
+
+`eval_suffix` exists because a simulation has no separate non-bias-corrected
+variant, unless you simulate one with `rf.percent` and let it share the label.
+
+Notes:
+
+- The GM `_probseg` that `simu.clean` writes gives an **exact** nogm target,
+  the voxels where the triangular decomposition of the label overestimates GM.
+  `2_prep_segment.py` can only estimate that from the CAT12 `p1`.
+- The fold follows the source subject, so variants of one brain never land on
+  both sides of the cross validation.
+- `5_train_nogm.py` still reads only the first 5 rows (`[:5]`); drop that if you
+  want to use the whole set.
+- Motion artefacts belong in the simulation, not in the augmentation: they are a
+  global k-space operation and `4_train_segment_patches.py` augments 128^3
+  patches, which cannot carry them. Simulate motion variants instead, they share
+  the label file.
+- `6_train_warp.py` is not covered here, it needs the 1.5mm `p/` inputs from the
+  CAT12 path.
+
+### Resolution augmentation
+
+`Resolution3d` in `src/augment.py` replaces mriaug's `max_down`, which is
+switched off in the training scripts. Two reasons:
+
+- mriaug's `Downsample3d` is fixed to a single axis (its `dims` defaults to the
+  integer `2`), so it only ever simulates thick axial slices. `Resolution3d`
+  picks any of the three axes and, with probability `p_iso`, degrades all three
+  at once - a 1mm scan interpolated onto the 0.5mm grid, which is what most real
+  data is.
+- mriaug reduces *and* interpolates back with `nearest`. A thick slice is the
+  integral of the tissue over the slice profile, so the reduction has to be an
+  average (`area`), and the way back is the same spline the rest of the
+  preprocessing uses. Reduced to 1.5mm slices and back, the rmse against the
+  undegraded volume drops from 48.8 to 31.8.
+
+### Brain extraction (optional)
+
+`8_train_bet.py` trains the two deepbet models on the same simulations. It needs
+a **native space** run (`simu.affine = 0`), because deepbet works on the whole
+head: the 168x192x168mm field of view of the registered grid slices through the
+skull, and on one test volume 66% of its inferior face and 27% of its anterior
+face are still head.
+
+The script reproduces both deepbet stages - the bbox model on the whole volume
+at 128^3, the main model on the bounding box of the brain plus a 10% margin at
+256^3 - and uses deepbet's own normalization and its own `get_bbox`, so the crop
+a model is trained on is the crop it gets at inference. `7_compile_models.py`
+traces both with a softmax, because deepbet thresholds the model output directly
+while deepmriprep applies the softmax itself for nogm.
+
+The mask is `dseg > 0`, i.e. CAT12's APRG mask, so the result reproduces that and
+not the mask deepbet ships. That is the reason to do it: `2_prep_segment.py`
+strips with `p0 > 0` while inference strips with deepbet, and training the
+extractor on the same mask the segmentation was trained behind removes that
+mismatch. Out of domain it will be less robust than the shipped model, which saw
+far more heterogeneous data.
+
 ## Run scripts
 Run the 7 scripts (+read the comments) `1_prep_warp.py`-`7_compile_models.py`!
  

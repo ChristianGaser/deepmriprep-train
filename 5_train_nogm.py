@@ -4,6 +4,7 @@ from src.loss import DiceFocalLoss
 from src.models import Unet3d
 path = '.'  # if data_path is absolute(=starts with "/") set path = '/'
 data_path = 'data'
+csv_name = 'openneuro_hd.csv'  # 'simulated.csv' gives exact nogm targets from the GM probseg
 Path(f'{data_path}/models').mkdir(exist_ok=True)
 
 
@@ -19,7 +20,7 @@ def get_patch_df(df, patch_strings, cols=('img', 'mask')):
 
 if __name__ == '__main__':
     set_seed(1)
-    df = pd.read_csv(f'{data_path}/csvs/openneuro_hd.csv')[:5]
+    df = pd.read_csv(f'{data_path}/csvs/{csv_name}')[:5]  # NOTE: only the first 5 subjects
     df['img'] = f'{data_path}/p0_05mm/' + df.filename + '.nii.gz'
     df['mask'] = f'{data_path}/nogm/' + df.filename + '.nii.gz'
     size = (128, 288, 256)

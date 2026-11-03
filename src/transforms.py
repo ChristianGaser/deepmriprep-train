@@ -67,6 +67,30 @@ class ContrastShift(RandTransform):
         return shift_contrast(x, self._w, self._dm)
 
 
+class BetNormalize(RandTransform):
+    """The intensity normalization deepbet applies before its models.
+
+    deepbet does percentile clip -> z-score -> `.226 * x + .449` (the grayscale
+    ImageNet statistics) in one step, on the volume it is about to segment. The
+    clip needs the percentiles of the whole head and is therefore done once when
+    the volumes are prepared; this transform is the rest of it, applied after
+    the augmentation so the network sees the same distribution it will see at
+    inference. Statistics are per sample, as they are in deepbet.
+    """
+    order = 90
+    split_idx = None  # also on the validation set, it is not an augmentation
+
+    def __init__(self, mean: float = .449, std: float = .226, p: float = 1.):
+        super().__init__(p=p)
+        store_attr()
+
+    def encodes(self, x: TensorImage3d):
+        dims = tuple(range(-3, 0))
+        x = x.clamp(min=0, max=1)
+        x = (x - x.mean(dims, keepdim=True)) / x.std(dims, keepdim=True).clamp(min=1e-6)
+        return self.std * x + self.mean
+
+
 class ApplyZeroMask(RandTransform):
     order = 82
     def __init__(self, p: float = 1.):
